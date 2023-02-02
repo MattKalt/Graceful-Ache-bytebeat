@@ -384,7 +384,7 @@ bs2vel=r(1,[
 ]),
 
 bs2vol=r(1,[
-	r(256,1), r(128,2), r(128,1), r(64,[1,1,.7,1])
+	r(256,1), r(128,1.5), r(128,1), r(64,[1,1,.6,1])
 ]),
 
 bta='1hh1sh1hhh',
@@ -496,13 +496,12 @@ L2v=lim(reverb(L2s/4,18e3,1,.4,.9, 1), .01),
 
 B1a=m(m(B1,.5)^(sinify(B1)/16)**2,.5),
 B1a *= seq(bs1vol, 10),
-
-B2s=synth(B2,bs2vel,10,1,0x0301399),
+B2s=synth(B2,bs2vel,10,1,0x22032799),
 bv=bs2vol[(t>>10)%640],
-B2s*=bv,
+B2s *= bv,
 B2a=min(s2s(B2), lp(beat(bs2vel,10,1,2e4),.7)),
 B2b=m(B2a*1.4+ds(B2a,8)/3),
-B2b*=bv,
+B2b *= bv,
 B2c=sinify(B2) * lp(beat(bs2vel,10,1,4e4)/257,.001),
 B2d=m(B2c/4+ds(B2c,4)/2),
 //B2d*=bv,
@@ -512,7 +511,7 @@ DR=beat(drumPattern,10,2e5),
 leads=pan=> pan?L1s/2:L2s*.7,
 //leads=r=> lim(r?L1s:L2s,.01)/4,
 lverbs=pan=> pan?L2v/3:L2v/4+L1v/4,
-schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/4 + B2s/15 + L3s*.7 + L4s/11,
+schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/5 + B2d/6 + B2s/11 + L3s*.7 + L4s/11,
 
 Master = pan => lim(.3 * schain(pan) + lp(DR,1)*.3, .1)*.15 + DR*.1 + lp(DR,2)*.3 + leads(pan)/8 + B2d/4,
 
