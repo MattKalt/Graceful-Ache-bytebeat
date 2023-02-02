@@ -274,6 +274,12 @@ l3vel=r(8,[
 ]),
 l3vel[62]=l3vel[63]=.5,
 
+l3vol=r(1,[
+	r(29, 0),
+	r(11, 1),
+	r(32, [0,1])
+]),
+
 l4a=['7 + vibrato',0,12,10,7,7,7,5,3,3],
 l4b=[3,2,0,0,-2,-2],
 l4c=[3,5,7,10,'6.5 + vibrato','6.9 + vibrato'],
@@ -476,7 +482,7 @@ L3s=sy(L3*2,l3vel,10,1.1,0x0071010F),
 L4s=sy(L4*2,l4vel,11,1.5,0x30070F26), //sorta vocal
 //max(0x58,L4s)
 
-L3s *= seq(l4vol, 17),
+L3s *= seq(l3vol, 15),
 L4s *= seq(l4vol, 17),
 
 L1v=lim(reverb(L1s/4, 3e3, 1.5, .5, .5, 1), .001),
@@ -499,8 +505,8 @@ DR=beat(drumPattern,10,2e5),
 
 leads=pan=> pan?L1s/2:L2s*.4,
 //leads=r=> lim(r?L1s:L2s,.01)/4,
-lverbs=pan=> pan?L2v/4:L2v/4+L1v/4,
-schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/4 + B2s/15 + L3s*.6 + L4s/12.5,
+lverbs=pan=> pan?L2v/3:L2v/4+L1v/4,
+schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/4 + B2s/15 + L3s*.7 + L4s/12.5,
 
 Master = pan => lim(.3 * schain(pan) + lp(DR,1)*.3, .1)*.15 + DR*.1 + lp(DR,2)*.3 + leads(pan)/8 + B2d/4,
 
