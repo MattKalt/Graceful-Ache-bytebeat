@@ -10,7 +10,6 @@ sp = (str, sep='') => str.split(sep),
 j = (arr, sep='') => arr.join(sep),
 
 tra = transpose = (arr, amt) => arr.map(x=>x+amt),
-//tra = transpose = (...x) => x.isArray()? tra(...x) : j( tra( sp(x), amt ) ),
 tra = transpose = (x, amt) => Array.isArray(x)? x.map(e=>e+amt) : j( sp(x).map(e=>e+amt) ),
 
 // Uses up a lot of chars and isn't /super/ readable, but a major timesaver when creating
@@ -424,7 +423,14 @@ btA= '11s111s122s1SS1s',
 //btD= btz + btz + btC + btz, 
 btB= j( r(8, bty)) + j( r(6, btz)) + j( r(3, btC + btz)) + btA,
 
-btE= 
+btE= 's1s1s111',
+btF= 's1s1s112',
+btG= 's111',
+btH= 's1SS',
+btI= 'SSSSSSSS1SSS1S22',
+btJ= j( r(3, [btE + btF])) + j( r(8, btG)) + j( r(4, btH)) + btI + bto,
+
+
 
 bt1=j( r(1, [ 
 //	r(4, sp(btk) ), r(2, sp(btl) ), r(4, sp(btm) ), r(8, sp(btn) ), sp(bto)
@@ -438,7 +444,7 @@ bt4= btr + btt + bts + btr + bth,
 bt5= btv + btp + bts + btv + bte,
 
 
-drumPattern= bt1 + bt3 + btB + bt4 + bt4 + bt5 + bt5, bt1, bt3a,
+drumPattern= bt1 + bt3 + btB + bt4 + bt4 + bt5 + bt5 + btJ,
 //bt3=j(sp(bt3),'0') + '0', //half-time
 
 0
@@ -503,10 +509,10 @@ B2d=m(B2c/4+ds(B2c,4)/2),
 DR=beat(drumPattern,10,2e5),
 
 
-leads=pan=> pan?L1s/2:L2s*.4,
+leads=pan=> pan?L1s/2:L2s*.7,
 //leads=r=> lim(r?L1s:L2s,.01)/4,
 lverbs=pan=> pan?L2v/3:L2v/4+L1v/4,
-schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/4 + B2s/15 + L3s*.7 + L4s/12.5,
+schain=pan=> (hp(B1a, pan?.09:.1)*.4 + lverbs(pan)*.3) + B2b/4 + B2s/15 + L3s*.7 + L4s/11,
 
 Master = pan => lim(.3 * schain(pan) + lp(DR,1)*.3, .1)*.15 + DR*.1 + lp(DR,2)*.3 + leads(pan)/8 + B2d/4,
 
