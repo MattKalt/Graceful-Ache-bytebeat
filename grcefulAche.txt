@@ -1,5 +1,12 @@
 // A collection of effects you can use on _ANY_ variable that changes
 
+
+//Original t, increments one per sample. The reverb, harmonifier, hihat, and snare need this.
+t2 = t,
+
+//Change t here, not below, or it messes with the snare/hihat sounds
+t *= 8 / 48,
+
 // Repeat x beats of y
 // SUPER useful if you're writing complex beats/melodies
 // Include this or the FXs won't work (or you could replace r(x, y) with Array(x).fill(y))
@@ -37,15 +44,15 @@ mseq = (...x) => t * 2 ** (seq(...x) / 12),
 bt = beat = (arr, spd, vel = 2e4, vol = 1, T = t, oct = 0) =>
 	m(vel / (T & (2 ** (spd - oct) / seq( arr, spd ) ) - 1), vol),
 
-ls = sin(t / 9 & t >> 5), // long snare
+ls = sin(t2 / 9 & t2 >> 5), // long snare
 //s = sin(t>>5), // acoustic-sounding grungy snare
 //s = (((t*8/48)>>9) & 1) ? 0 : sin(t / 9 & t >> 5), // Snare
-s = seq( [ls, 0], 9, t*8/48), // Snare
-S = seq( [ls, 0], 8, t*8/48), // double snare
+s = seq( [ls, 0], 9), // Snare
+S = seq( [ls, 0], 8), // double snare
 //s = sin((t | t * .7) >> 4), // quieter snare
 //h = 1 & t * 441/480, // long Hihat
-h = 1 & t * 441/480, // long Hihat
-h = seq( [h,h,h,0], 8, t*8/48), //quieter, faster attack
+h = 1 & t2 * 441/480, // long Hihat
+h = seq( [h,h,h,0], 8), //quieter, faster attack
 
 
 
@@ -56,12 +63,10 @@ h = seq( [h,h,h,0], 8, t*8/48), //quieter, faster attack
 // But even then, should only create a momentary click/pop (might be more severe for reverb)
 // You can also set it to [] and modify the effects to read m(fx[stuff]) to get around NaN issues
 //    ^(this gets rid of the lag when editing, but sparse arrays might be slower during runtime)
-t ? 0 : fx = r( 5e4, 0 ),
+t ? 0 : fx = r( 3e6, 0 ),
 // Iterator, resets to 0 at every t
 fxi = 0,
 
-// NOTE: IF YOU ALTER T, DO IT AFTER THIS
-t2 = t,
 //dsp = downsample the bitrate of the reverb, dsp=2 cuts uses half as much space, 3 uses 1/3, etc
 rv = reverb = (x, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 2, T=t2) => (
 	ech = y => fxi + ( 0|(y % len) / dsp ),
@@ -108,8 +113,8 @@ lim = limiter = (x, sp = .1) => (
 
 
 
-//Todo: explain
-//Todo: optimize (main culprit of slowdown)
+// XORs the input with its harmonics, controlled by the bits of a number ('tone')
+// Unoptimized version
 hm = harmonify = (x,tone) => {
 	o = 0;
 	//len=8;
@@ -120,6 +125,24 @@ hm = harmonify = (x,tone) => {
 	return o;
 },
 
+
+// Instead of computing on the fly, this version computes a wavetable at the start
+// Side effects: you can't start the song at any t, and output is always full-volume
+hm = harmonify = (x, tone, waveTableSize = 256 * t2/t | 0 ) => {
+	//play from the buffer
+	if( t2 > waveTableSize) {
+		o = fx[ fxi + ( x * t2 / t & waveTableSize - 1) ];
+		fxi += waveTableSize;
+		return o
+	}
+	//fill the buffer
+	for (i=0; i<8; i++) {
+		fx[ fxi + t2 ] ^= ( 1 & (tone>>i) ) * (i+1)/2 * t
+	}
+	fxi += waveTableSize;
+	//return x //not strictly necessary unless the wavetable size is large enough to notice silence at the start
+},
+
 //Basically just treat this like a black box and fiddle with the knobs at random
 //For a more detailed exmplanation:
 //	X, and the First 2 hexes of y, are the fun surprise knobs :)
@@ -128,18 +151,18 @@ hm = harmonify = (x,tone) => {
 // The next hex controls the *thump*/click/noise of the attack
 // The next hex controls the decay
 // The next 2 hexes control the lowpass
-sy=synth=(melody,vel,sp,x,y)=>
+sy = synth = (melody, velTrack, speed, x, y, ...z)=>
 	lp(
 		min(
 			m(
 				hm(
 					beat( [x], 10, 6e4, 1, melody, .02* ( (y>>24) & 255 ) )
-				, ( y>>16 ) & 255
+				, ( y>>16 ) & 255, ...z
 				)
 			, .9,1
 			)
-			+ beat( vel, sp, 1e3 * ( (y>>12) & 15) )
-		, beat( vel, sp, 1, 2e4 * ( (y>>8) & 15 ) )
+			+ beat( velTrack, speed, 1e3 * ( (y>>12) & 15) )
+		, beat( velTrack, speed, 1, 2e4 * ( (y>>8) & 15 ) )
 		)
 	, y&255
 	),
@@ -148,15 +171,13 @@ sy=synth=(melody,vel,sp,x,y)=>
 //saw 2 sine
 s2s = sinify = x => sin( x*PI/64 ) * 126 + 128,
 
-v = vibrato = sin(t>>10)/2,
+v = vibrato = sin(t2>>10)/2,
 
-t *= 8 / 48,
-//t *= (7.9 * 2**(t>>18)/12) / 48, //freaky and cool!
 
 
 //------------------ SEQUENCES -----------------------------------
 
-//do not take any of this out of the 't ? 0' statement
+//Do not take any of this out of the 't ? 0' statement
 t ? 0 : (
 
 //half-time
@@ -465,25 +486,28 @@ sn2 = on( drumPattern, 'S'),
 
 L1 = mseq( l1, 11 ),
 L1 = ( m( L1*16 )/3 + m( L1*16.2 )/3 + m( L1*15.6 )/3 ) * .9,
-L2 = m( 16*mseq( l2, 10 ), .9),
+L2 = 16*mseq( l2, 10 ),  // m( ,.9) sounds better using old Harmonifier, no-m() sounds better using new/wavetable Harmonifier
 L3 = m( 32*mseq( l3, 10 ), .9),
 L4 = mseq( l4, 11 ),
 L4 = ( m( L4*16 )/3 + m( L4*16.3 )/3 + m( L4*15.7 )/3 ),
 B1 = 2 * mseq( bs1, 10 ),
 B2 = mseq( bs2, 10 ),
 
+
+
 L1s = synth( L1*2, l1vel, 10, 1.07, 0x71010599),
 //L2s = sy( L2/2, l2vel, 10, 1.1, 0x0960E550), //cool hi slapp bass thing
 //L2s = sy( L2|L2/2, l2vel, 10, 1.1, 0x96045509),
-L2s = synth( L2/2, l2vel, 10, 1.1, 0x96345509), //piano 2
+L2s = synth( L2/2, l2vel, 10, 1.1, 0x9634950A), //piano 2
 L3s = synth( L3*2, l3vel, 10, 1.1, 0x0071010F),
 //L4s = sy( L4*2, l4vel, 11, 1.1, 0x30070F36), //sorta 8bit toy pianoish
 L4s = synth( L4*2, l4vel, 11, 1.5, 0x30070F26), //sorta vocal
 //max(0x58,L4s)
-B2s = synth( B2, bs2vel, 10, 1, 0x22032799),
+B2s = synth( B2, bs2vel, 10, 1, 0x22032599, 512 * t2/t | 0),
 
 
 L3s *= seq( l3vol, 15),
+L3s *= .7, //i using the version of Harmonifier that uses a wavetable
 L4s *= seq( l4vol, 17),
 
 L1v = lim( reverb( L1s/4, 3e3, 1.5, .5, .5, 1), .001),
@@ -507,8 +531,8 @@ DR += beat( [S], 10, 2e5) * seq( sn2, 10),
 
 
 leads = pan => pan ? L1s/2 : L2s*.7,
-lverb = pan => pan ? L2v/3 : L2v/4 + L1v/4,
-schain = pan => ( hp(B1a, pan ? .1 : .082)*.4 + lverb(pan)*.3) + B2b/5 + B2d/6 + B2s/11 + L3s*.7 + L4s/11,
+lverb = pan => pan ? L2v*.4 : L2v/4 + L1v/4,
+schain = pan => ( hp(B1a, pan ? .1 : .082)*.4 + lverb(pan)*.3) + B2b/4 + B2d/5 + L3s*.7 + L4s/11 + B2s/16,
 
 Master = pan => lim(.3 * schain(pan) + lp(DR,1)*.3, .1)*.15 + DR*.1 + lp(DR,2)*.3 + leads(pan)/8 + B2d/4,
 
