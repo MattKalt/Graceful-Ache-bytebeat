@@ -42,7 +42,6 @@ ls = sin(t / 9 & t >> 5), // long snare
 s = seq( [ls, 0], 9, t*8/48), // Snare
 S = seq( [ls, 0], 8, t*8/48), // double snare
 //s = sin((t | t * .7) >> 4), // quieter snare
-//h = 1 & t * 441/480, // long Hihat
 h = 1 & t * 441/480, // long Hihat
 h = seq( [h,h,h,0], 8, t*8/48), //quieter, faster attack
 
@@ -50,17 +49,16 @@ h = seq( [h,h,h,0], 8, t*8/48), //quieter, faster attack
 
 // The FX rack, stores memory for use in effects
 // Automatically keeps track of what's stored where
-// If you see red (NaNs), raise 3e5 higher, or adjust your reverbs' 'dsp' variable
+// If you see red (NaNs), raise 3e5 higher, or raise your reverbs' 'dsp' variable
 // Works best when FX are not inside conditionals (meaning the number of FX in use changes)
 // But even then, should only create a momentary click/pop (might be more severe for reverb)
-// I chose 3e6 because it's the size of Doom's sourcecode, you shouldn't be using more than that
 // You can also set it to [] and modify the effects to read m(fx[stuff]) to get around NaN issues
 //    ^(this gets rid of the lag when editing, but sparse arrays might be slower during runtime)
-t ? 0 : fx = r(5e4, 0),
+t ? 0 : fx = r(3e4, 0),
 // Iterator, resets to 0 at every t
 fxi = 0,
 
-// NOTE: IF YOU ALTER T, DO IT AFTER THIS FUNCTION
+// NOTE: IF YOU ALTER T, DO IT AFTER THIS
 t2 = t,
 //dsp = downsample the bitrate of the reverb, dsp=2 cuts uses half as much space, 3 uses 1/3, etc
 rv = reverb = (x, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 2, T=t2) => (
@@ -70,7 +68,6 @@ rv = reverb = (x, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 2, T=t2) => (
 	fxi += 0|(len / dsp),
 	x
 ),
-
 
 lp = lopass = (x, f) => ( // f ~= frequency, but not 1:1
 	// fx[fxi] is the value of the last sample
@@ -119,6 +116,20 @@ hm=harmonify=(x,tone)=> {
 	return o;
 },
 
+//flattening the loop *might* improve performance
+//hm=harmonify=(x,tone)=> (
+//	o = 0,
+//	o ^= ( 1&(tone>>0) ) * 1/2 * x,
+//	o ^= ( 1&(tone>>1) ) * 2/2 * x,
+//	o ^= ( 1&(tone>>2) ) * 3/2 * x,
+//	o ^= ( 1&(tone>>3) ) * 4/2 * x,
+//	o ^= ( 1&(tone>>4) ) * 5/2 * x,
+//	o ^= ( 1&(tone>>5) ) * 6/2 * x,
+//	o ^= ( 1&(tone>>6) ) * 7/2 * x,
+//	o ^= ( 1&(tone>>7) ) * 8/2 * x,
+//	o
+//),
+
 //Basically just treat this like a black box and fiddle with the knobs at random
 //For a more detailed exmplanation:
 //	X, and the First 2 hexes of y, are the fun surprise knobs :)
@@ -145,6 +156,8 @@ s2s=sinify=x=>sin(x*PI/64)*126+128,
 v = vibrato = sin(t>>10)/2,
 
 t *= 8 / 48,
+
+
 //t *= (7.9 * 2**(t>>18)/12) / 48, //freaky and cool!
 
 
@@ -453,7 +466,19 @@ drumPattern= bt1 + bt3 + btB + bt4 + bt4 + bt5 + bt5 + btJ,
 
 //----------------- MIXER -----------
 
+t ? 0 : (
+	bufferL = r(256, 0),
+	bufferR = r(256, 0),	
+	bufferedT = 0
+),
 
+
+//I don't know enough about the player to know if this helps
+//or if writing async functions is possible
+function writeToBuffer(idx) {
+
+tbak=t, //I know this is messy
+t=idx,
 
 //L1=16*t*2**(l1[(t>>11)%32]/12),
 //L2=16*t*2**(l2[(t>>10)%64]/12),
@@ -514,7 +539,26 @@ schain=pan=> (hp(B1a, pan?.1:.082)*.4 + lverbs(pan)*.3) + B2b/5 + B2d/6 + B2s/11
 
 Master = pan => lim(.3 * schain(pan) + lp(DR,1)*.3, .1)*.15 + DR*.1 + lp(DR,2)*.3 + leads(pan)/8 + B2d/4,
 
-[ min(255, Master(0) * 1.4), min(255, Master(1) * 1.4) ]
+bufferL[idx] = min(255, Master(0) * 1.4),
+bufferR[idx] = min(255, Master(1) * 1.4),
+
+t=tbak
+},
+
+function renderNextChunk(chunkSize) {
+	nextChunk = ( ceil( t / chunkSize ) + 1 ) * chunkSize;
+	if ( bufferedT >= nextChunk ) return
+	for (i=bufferedT; i < nextChunk; i++) {
+		writeToBuffer(i % bufferL.length );
+	}
+	bufferedT = nextChunk;
+	return
+	
+}
+
+renderNextChunk(64),
+
+[ bufferL[t], bufferR[t] ]
 
 //Loudness war version:
 //[ Master(0) + 0.28*lim( Master(0), .01) , Master(1) + 0.28*lim( Master(1), .01) ];
