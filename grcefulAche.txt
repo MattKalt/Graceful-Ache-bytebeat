@@ -75,13 +75,13 @@ t ? 0 : fx = r( 4e4, 0 ),
 fxi = 0,
 
 //dsp = downsample the bitrate of the reverb, dsp=2 cuts uses half as much space, 3 uses 1/3, etc
-rv = reverb = (x, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 2, T=t2) => (
-	ech = y => fxi + ( 0|(y % len) / dsp ),
+rv = reverb = ( input, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 2, T=t2) => (
+	x = y => fxi + ( 0|(y % len) / dsp ),
 	bl = T/dsp - (T/dsp)|0, //how much to blend between this and next buffer
-	x = x*dry + wet * ( ( 1 - bl ) * fx[ ech(T) ] + bl * fx[ ech( T + dsp )] ) || 0,
-	t2 % dsp ? 0 : fx[ ech(t2) ] = x * feedb,
+	input = input*dry + wet * ( ( 1 - bl ) * fx[ x(T) ] + bl * fx[ x( T + dsp )] ) || 0,
+	t2 % dsp ? 0 : fx[ x(t2) ] = input * feedb,
 	fxi += 0|(len / dsp),
-	x
+	input
 ),
 
 
@@ -97,41 +97,48 @@ lp = lopass = (x, f) => ( // f ~= frequency, but not 1:1
 // Sounds kinda off, and hipass+lopas=/=original when you use ^, but + sounds harsher
 hp = hipass = (x, f) => (x % 256) ^ lp(x, f),
 
-lim = limiter = ( input, speed = .1, lookahead = 64, wet = .9, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 1 ) => {
-	l = x => fxi + 2 + ( t2 + x|0 ) % lookahead;
-	fx[ l(0) ] = input;
-	B = fx[ l(1) ]; //oldest in buffer
-	d = [255,0];
+
+//fast, no atk/release or lookahead
+//only sqaushes upper part of the waveform
+//to squash the lower part, do 255-*comp(255-x,...)
+comp = (x, thresh=128, ratio=2) => ( min(x,thresh) + ( max(min(x,255),thresh) - thresh) / ratio ) * 255 / (thresh + (255 - thresh)/ratio),
+
+lim = limiter = (input, speed = .1, lookahead = 512, wet = .9, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 1) => {
+	x = y => fxi + 2 + ( t2 + y|0 ) % lookahead;
+	fx[ x(0) ] = input;
+	o = fx[ x(1) ]; //oldest in buffer
+	mi = 255, mx = 0;
 	for( i=1; i <= iters; i++) { //older to newest
-		x = ( i / iters ) ** p; //'p' changes how lookaheads affect the function, 0..1 makes it quiet/stacc. but distorted
-		//d[0] = min( d[0], B, fx[ l( i * lookahead / iters) ] / i + B * ( 1 - 1/i) ); //harmonic 
-		d[0] = min( d[0], B, fx[ l( i * lookahead / iters) ] * (1-x) + B * x );
-		d[1] = max( d[1], B, fx[ l( i * lookahead / iters) ] * (1-x) + B * x );
+		y = ( i / iters ) ** p; //'p' changes how lookaheads affect the function, 0..1 makes it quiet/stacc. but distorted
+		mi = min( mi, fx[ x( i * lookahead / iters) ] * (1-y) + o * y );
+		mx = max( mx, fx[ x( i * lookahead / iters) ] * (1-y) + o * y );
 	}
-	mi = fx[ fxi ] = min( d[0], fx[ fxi ] + speed, 255 );
-	mx = fx[ fxi+1 ] = max( d[1], fx[ fxi+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
+	mi = fx[ fxi ] = min( mi, o, fx[ fxi ] + speed, 255 );
+	mx = fx[ fxi+1 ] = max( mx, o, fx[ fxi+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
 	fxi += 2 + lookahead;
-	return ds( ( B - mi ) * 255/(mx-mi), saturate ) * wet + B * (1-wet)
+	return ds( ( o - mi ) * 255/(mx-mi), saturate ) * wet + o * (1-wet)
 },
 
 
 
 // XORs the input with its harmonics, controlled by the bits of a number ('tone')
 // Unoptimized version
-//hm = harmonify = (x,tone) => {
-//	o = 0;
-//	//len=8;
-//	len = log2(tone) + 1;
-//	for (i=0; i<len; i++) {
-//		o ^= ( 1 & (tone>>i) ) * (i+1)/2 * x
-//	}
-//	return o;
-//},
+hm = harmonify = (x,tone, waveTableSize = 8) => {
+	waveTableSize *= 64 * t2 / t | 0;
+	o = 0;
+	//for (i=0; i < log2(tone) + 1; i++) { //flexible size of 'tone'
+	for (i=0; i<8; i++) {
+		y = (i+1)/2 * x,
+		o ^= ( ( 1 & (tone>>i) ) * y ) % waveTableSize //^ ( abs( m( tone>>(i+8) * y ) - 128 ) * 2 ) % waveTableSize
+		//o ^= ( ( 1 & (tone>>i) ) * y ) % waveTableSize ^ ( abs( m( tone>>(i+8) * y ) - 128 ) * 2 ) % waveTableSize
+	}
+	return o;
+},
 
 
 // Instead of computing on the fly, this version computes a wavetable at the start
 // Side effects: you can't start the song at any t, and output is always full-volume
-hm = harmonify = (x, tone, waveTableSize = 256 * t2/t | 0 ) => {
+hm2 = harmonify = (x, tone, waveTableSize = 256 * t2/t | 0 ) => {
 	//play from the buffer
 	if( fx[fxi] > waveTableSize ) {
 		o = fx[ fxi + 1 + ( x * t2 / t & waveTableSize - 1) ];
@@ -514,8 +521,10 @@ L3s *= seq( l3vol, 15),
 L3s *= .4, //i using the version of Harmonifier that uses a wavetable
 L4s *= seq( l4vol, 17),
 
-L1v = lim( reverb( L1s/4, 3e3, 1.5, .5, .5, 1), .001),
-L2v = lim( reverb( L2s/4,18e3,1,.4,.9, 1), .01),
+L1v = lim( reverb( L1s, 3e3, 1.5, .5, .5, 1), .003, 512, 1, 9),
+//L1v = reverb( L1s/4, 3e3, 1.5, .5, .5, 1) * 9,
+L2v = lim( reverb( L2s,18e3, 1, .4, .9, 1), .01 + (2/t), 512, 1, 9),
+//L2v = reverb( L2s/4,18e3, 1, .4, .9, 1) * 9,
 
 B1a = m( m( B1, .5 ) ^ ( sinify(B1)/16 ) ** 2, .5),
 B1a *= seq( bs1vol, 10),
@@ -529,22 +538,25 @@ B2d = m( B2c/4 + ds(B2c,4)/2),
 
 DR = beat( drumPattern, 10, 2e5),
 //necessary because 'eval' functionality removed:
-DR += beat( [h], 10, 2e5) * seq( hat, 10),
-DR += beat( [s], 10, 2e5) * seq( sn1, 10),
-DR += beat( [S], 10, 2e5) * seq( sn2, 10),
+DR += beat( [h], 10, 2e5) * seq( hat, 10) * .8,
+DR += beat( [s], 10, 2e5) * seq( sn1, 10) * .9,
+DR += beat( [S], 10, 2e5) * seq( sn2, 10) * .9,
 
 
-leads = pan => pan ? L1s/2 : L2s*.7,
-lverb = pan => pan ? L2v*.4 : L2v/4 + L1v/4,
-schain = pan => ( hp(B1a, pan ? .1 : .082)*.4 + lverb(pan)*.3) + B2b/4.5 + B2d/5.5 + L3s/2 + L4s/11 + B2s/14,
+leads = pan => lim( pan ? L1s*.4 : L2s*.7, 0, 1),
+lverb = pan => pan ? L2v*.4 : L2v/4 + L1v/5,
+schain = pan => ( hp(B1a, pan ? .1 : .082)*.4 + lverb(pan)*.2) + B2b/4.5 + B2d/5.5 + L3s/2 + L4s/9 + B2s/14,
 
-Master = pan => min( 255, lim(
+Master = pan => comp( lim(
 
- lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512)*.21/2 +
- lim( DR*.14 + lp(DR,2)*.5 + leads(pan)*.175 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2,
+(
+ lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, .9, 9, 0, 8)*.21/2 +
+ lim( DR*.14 + lp(DR,2)*.5 + lverb(pan)*.2 + leads(pan)*.175 + B2d*.35 + L3s*.35, 1, 512, .1, 32, 0, 16, -.9, 1)/2
+) * 1.7,
 
-	.03, 512, .2, 32, 1, 16, 0, 1
-) * 1.7
+	.03, 512, .2, 48, 1, 16, 0, 1
+)
+, 240, 16
 ),
 
 [ Master(0), Master(1) ]
