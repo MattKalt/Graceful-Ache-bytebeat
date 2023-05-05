@@ -24,12 +24,14 @@ tra = transpose = (x, amt) => Array.isArray(x)? x.map( e => e + amt ) : j( sp(x)
 m = mix = (x, vol=1, dist=0) => ( ( x * vol * ( 1 + dist ) ) % ( 256 * vol ) ) || 0,
 
 // Waveshaper distortion
+// Assumes range is neatly between 0-255; use after limiter
+// Negarive values make it rounder (though after .6 there are wraparound artifacts)
 ds = (x, amt) => x * (1 - amt) + 127 * ( ( ( x / 127 ) - 1 ) ** 3 + 1 ) * amt,
 
 
 seq = ( arr, spd, t2=t ) => arr[ (t2 >> spd) % arr.length ],
-//seq=(r,s,T=t,x=0)=>(i=T/2**s,j=i|0,k=(i-j)**x,L=r.length,x?(1-k)*r[j%L]+k*r[(j+1)%L]:r[j%L]), //version that lerps
-//seq = ( arr, spd, T=t ) => arr[ ( ( T >> spd+4 ) + ( 21 & T >> spd ) ) % arr.length ], //chaos >:3
+//seq=(r,s,t2=t,x=0)=>(i=t2/2**s,J=i|0,k=(i-J)**x,L=r.length,x?(1-k)*r[J%L]+k*r[(J+1)%L]:r[J%L]), //version that lerps
+//seq = ( arr, spd, t2=t ) => arr[ ( ( t2 >> spd+3 ) + ( 21 & t2 >> spd-1 ) ) % arr.length ], //chaos >:3
 
 
 
