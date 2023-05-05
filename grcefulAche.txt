@@ -41,7 +41,7 @@ t ? 0 : F = r( 26e3, 0 ),
 I = 0,
 
 
-seq = ( arr, spd, t2=t ) => arr[ (t2 >> spd) % arr.length ],
+//seq = ( arr, spd, t2=t ) => arr[ (t2 >> spd) % arr.length ],
 //seq=(r,s,t2=t,x=0)=>(i=t2/2**s,J=i|0,k=(i-J)**x,L=r.length,x?(1-k)*r[J%L]+k*r[(J+1)%L]:r[J%L]), //version that lerps
 seq=(r,s,t2=t,x=0)=>(i=t2/2**s,J=i|0,L=r.length,x?(k=(i-J)**x,(1-k)*r[J%L]+k*r[(J+1)%L]):r[J%L]), //v slight perf boost
 
@@ -147,7 +147,27 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias
 	return ds( ( o - mi ) * 255/(mx-mi), saturate ) * wet + o * (1-wet)
 },
 
-
+//adds a dsp value similar to reverb
+//and uses lerp seq
+//DEFINITELY overkill
+lim = limiter = (input, speed=.1, lookahead=512, wet=.99, thresh=9, bias=0, iters=4, satur=0, p=1, dsp=3, exp=4) => {
+	x = y => I + 2 + ((( T + y ) % lookahead)/dsp);
+	z = y => seq( F, 0, x(y), exp );
+	//z = y => F[ x(y)|0 ];
+	F[ x(0)|0 ] = input; //newest in buffer, equivalent to F[ x(lookahead) ]
+	//T % dsp ? 0 : F[ x(0)|0 ] = input; //newest in buffer, equivalent to F[ x(lookahead) ]
+	o = z(dsp); //oldest in buffer
+	mi = 9e9, mx = -mi;
+	for( i=1; i <= iters; i++) { //older to newest
+		y = ( i / iters ) ** p; //'p' changes how lookaheads affect the function, 0..1 makes it quiet/stacc. but distorted
+		mi = min( mi, z( i * lookahead / iters ) * (1-y) + o * y );
+		mx = max( mx, z( i * lookahead / iters ) * (1-y) + o * y );
+	}
+	mi = F[ I ] = min( mi, o, F[ I ] + speed );
+	mx = F[ I+1 ] = max( mx, o, F[ I+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
+	I += 3 + (lookahead / dsp)|0;
+	return ds( ( o - mi ) * 255/(mx-mi), satur ) * wet + o * (1-wet)
+},
 
 // XORs the input with its harmonics, controlled by the bits of a number ('tone')
 // "Unoptimized" version
@@ -583,11 +603,11 @@ schain = pan => ( ( B1a ^ lp(B1a, pan ? .1 : .082))*.35 + lverb(pan)*.2) + B2b/4
 
 Master = pan => lim(
 
- lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, 1, 9, 0, 8, 0, 2)*.105 +
- lim( DR*.14 + lp(DR,2)*.4 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
+ lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, 1, 9, 0, 8, 0, 2, 3, 2)*.105 +
+ lim( DR*.14 + lp(DR,2)*.4 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0, 1, 1, 2, 4)/2 //just latency
 
 
-,.01, 512, 1, 68, 99, 16, -.2
+,.01, 512, 1, 68, 99, 16, -.2, 1, 1, 0
 
 ),
 
