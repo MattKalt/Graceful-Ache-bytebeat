@@ -588,12 +588,11 @@ schain = pan => ( ( B1a ^ lp(B1a, pan ? .1 : .082))*.35 + lverb(pan)*.2) + B2b/1
 
 Master = pan => lim(
 
- lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, 1, 9, 0, 16, -.2, 1)*.1 +
- lim( DR*.14 + lp(DR,2)*.4 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
+ lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, 1, 9, 0, 16, -.1, 1)*.1 +
+ lim( DR*.14 + lp(DR,2)*.5 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
 
 
-,.01, 512, 1, 76, 99, 16, max(-.25,t*-5e-7), 0
-
+,.01, 512, 1, max(96,196-t*1e-3), 99, 16, 0, 0
 
 ),
 
