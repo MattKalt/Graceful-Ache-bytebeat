@@ -577,9 +577,9 @@ B2d = m( B2c/4 + ds(B2c,4)/2),
 
 DR = beat( drumPattern, 10, 2e5),
 //necessary because 'eval' functionality removed:
-DR += beat( [h], 10, 2e5) * seq( hat, 10),
-DR += beat( [s], 10, 2e5) * seq( sn1, 10) * .9,
-DR += beat( [S], 10, 2e5) * seq( sn2, 10) * .9,
+DR += beat( [h], 10, 2e5) * seq( hat, 10) * .9,
+DR += beat( [s], 10, 2e5) * seq( sn1, 10) * .8,
+DR += beat( [S], 10, 2e5) * seq( sn2, 10) * .8,
 
 
 leads = pan => lim( pan ? L1s*.4 : L2s*.7, 0, 1),
@@ -592,7 +592,8 @@ Master = pan => lim(
  lim( DR*.14 + lp(DR,2)*.4 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
 
 
-,.01, 512, 1, 76, 99, 16, -.2, 0
+,.01, 512, 1, 76, 99, 16, max(-.25,t*-5e-7), 0
+
 
 ),
 
