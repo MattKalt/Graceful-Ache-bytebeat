@@ -50,11 +50,11 @@ seq=(r,s,t2=t,x=0)=>(i=t2/2**s,J=i|0,L=r.length,x?(k=(i-J)**x,(1-k)*r[J%L]+k*r[(
 
 
 //mseq = ( ...x ) => t * 2 ** ( seq(...x) / 12 ), //original
-mseq = ( ...x ) => t * 2 ** ( ( seq(...x) + ((t/9>>17)&3) )  / 12 ), //Trucker's Chorus version (specific to this song)
+mseq = ( ...x ) => t * 2 ** ( ( seq(...x) + ((t/9>>17)%3) )  / 12 ), //Trucker's Chorus version (specific to this song)
 //mseq = (arr, spd, T=t) => t * 2 ** ( ( ((t/9>>17)&3) + arr[ ( ( T >> spd+4 ) + ( 21 & T >> spd ) ) % arr.length] ) / 12 ), //changes all the melodies
 //smooth version, works well with seq lerp: (also features Trucker's Chorus)
 mseq = ( ...x ) => (
-	F[I++] += ( t/T * 2 ** ( ( seq(...x) + ((t/9>>17)&3) )  / 12))||0
+	F[I++] += ( t/T * 2 ** ( ( seq(...x) + ((t/9>>17)%3) )  / 12))||0
 ),
 
 
@@ -592,7 +592,7 @@ Master = pan => lim(
  lim( DR*.14 + lp(DR,2)*.5 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
 
 
-,.01, 512, 1, 96 + 4e6/(t+6e4), 99, 16, 0, 0
+,.01, 512, 1, 92 + 6e11/(t**2+9e9), 99, 16, 0, 0
 
 ),
 
