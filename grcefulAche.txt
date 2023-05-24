@@ -113,8 +113,7 @@ rv = reverb = ( input, len = 16e3, feedb = .7, dry = .4, wet = 1, dsp = 3, t2=T)
 lp = lopass = (x, f) => ( // f ~= frequency, but not 1:1
 	// F[I] is the value of the last sample
 	// You will need to change the 'x % 256' if you're using signed or floatbeat
-	x = min( max( x % 256, F[I] - f), F[I] + f), // Clamp the change since last sample between (-f, f)
-	F[I++] = x
+	F[I] = min( max( x % 256, F[I] - f), F[I++] + f) // Clamp the change since last sample between (-f, f)
 ),
 
 
