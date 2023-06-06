@@ -158,10 +158,11 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias =
 // Wet, bias, and p unused; speed is different
 lim3 = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 0, iters = 99, saturate = 0, p = 0) => (
 	//input = input||0,
-	input -= lp(input,t?.01:99), //remove offset
+	//input -= lp(input,t?.5/lookahead:99), //remove offset
+	input -= lp(input,t?.1:99),
 	speed = 1 - speed, //keeping it somewhat similar to 'speed' in other lim()
 	thresh /= 3, //keeping it somewhat similar to 'thresh' in other lim()
-	x = y => I + 1 + ( T + y|0 ) % lookahead,
+	x = y => I + 2 + ( T + y|0 ) % lookahead,
 	//F[ x(0) ] is the sample we're overwriting
 	o = F[ x(1) ], //oldest in buffer
 
@@ -181,12 +182,29 @@ lim3 = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias 
 	),
 	F[ x(0) ] = input,
 	F[I] = v,
-	I += lookahead + 1,
+	I += lookahead + 2,
 	//127 * ( o/v * (1-saturate) - (o/v)**3 * saturate) * wet + o * (1-wet) + 128
 	126 * o/v + 127
 	//debug ? NaN : 126 * o/v + 127
 ),
 
+lim4 = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 0, iters = 99, saturate = 0, p = 0) => (
+	//input = input||0,
+	//input -= lp(input,t?.5/lookahead:99), //remove offset
+	input -= lp(input,t?.1:99),
+	speed = 1 - speed, //keeping it somewhat similar to 'speed' in other lim()
+	thresh /= 3, //keeping it somewhat similar to 'thresh' in other lim()
+	x = y => I + 2 + ( T + y|0 ) % lookahead,
+	//F[ x(0) ] is the sample we're overwriting
+	o = F[ x(1) ], //oldest in buffer
+
+
+	F[ x(0) ] = input,
+	I += lookahead + 2,
+	//127 * ( o/v * (1-saturate) - (o/v)**3 * saturate) * wet + o * (1-wet) + 128
+	min( thresh, max( o, -thresh)) * 127 / thresh + 128
+	//debug ? NaN : 126 * o/v + 127
+),
 
 // ~5 chars shorter when minified but slightly worse/different performance:
 /*
@@ -678,7 +696,7 @@ Master = pan => lim3(
  lim( DR*.14 + lp(DR,2)*.5 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
 
 
-,.01, 512, 1, 92 + 6e11/(t**2+9e9), 99, 99, 0, 0
+,.01, 128*3, 1, 92 + 6e1/(t**2+9e9), 99, 127*3, 0, 0
 
 ),
 
