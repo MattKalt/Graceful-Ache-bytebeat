@@ -116,6 +116,8 @@ lp = lopass = (x, f) => ( // f ~= frequency, but not 1:1
 	F[I] = min( max( x % 256, F[I] - f), F[I++] + f) // Clamp the change since last sample between (-f, f)
 ),
 
+
+
 //For a hi-pass sound, m(x)^lp(x) sounds more harsh; lim(x, 9, <# under 256> ) sounds more natural, but is sosig
 
 
@@ -135,7 +137,7 @@ If your input only has peaks going upward (like anything involving beat() or syn
 	0, or very large: lower pitches dominate
 	0..1: stacatto and trebly
 */
-lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 0) => {
+lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 0) => {
 	x = y => I + 2 + ( T + y|0 ) % lookahead;
 	F[ x(0) ] = input; //newest in buffer, equivalent to F[ x(lookahead) ]
 	o = F[ x(1) ]; //oldest in buffer
@@ -151,6 +153,39 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias
 	I += 2 + lookahead;
 	return ds( ( o - mi ) * 255/(mx-mi), saturate ) * wet + o * (1-wet)
 },
+
+
+// Wet, bias, and p unused; speed is different
+lim3 = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 0, iters = 99, saturate = 0, p = 0) => (
+	//input = input||0,
+	input -= lp(input,t?.01:99), //remove offset
+	speed = 1 - speed, //keeping it somewhat similar to 'speed' in other lim()
+	thresh /= 3, //keeping it somewhat similar to 'thresh' in other lim()
+	x = y => I + 1 + ( T + y|0 ) % lookahead,
+	//F[ x(0) ] is the sample we're overwriting
+	o = F[ x(1) ], //oldest in buffer
+
+	//debug = 0,
+
+	//v, aka F[ I ], is the envelope
+	v = max( abs(input), F[I], thresh ), //put outside the othger max() for performance (cond. will be true less)
+	//v = max( abs(input), F[I] - speed, thresh ), //put outside the othger max() for performance (cond. will be true less)
+
+	max( abs( F[x(0)] ), abs( o ) ) >= v && //if the loudest sample is exiting the buffer:
+	(
+		v = thresh,
+		r( iters ).map( (e,i) => (
+			v = max( v, abs( F[ x( 1 + i * lookahead / iters ) ] ) )
+		,e))
+		//,debug = 1
+	),
+	F[ x(0) ] = input,
+	F[I] = v,
+	I += lookahead + 1,
+	//127 * ( o/v * (1-saturate) - (o/v)**3 * saturate) * wet + o * (1-wet) + 128
+	126 * o/v + 127
+	//debug ? NaN : 126 * o/v + 127
+),
 
 
 // ~5 chars shorter when minified but slightly worse/different performance:
@@ -637,13 +672,13 @@ leads = pan => lim( pan ? L1s*.4 : L2s*.7, 0, 1),
 lverb = pan => pan ? L2v*.4 : L2v/4 + L1v/6,
 schain = pan => ( B1a ^ lp(B1a, pan ? .1 : .082 ) ) *.35 + lverb(pan)*.2 + B2b/11 + B2d/5.5 + L3s/2 + L4s/9 + B2s/14,
 
-Master = pan => lim(
+Master = pan => lim3(
 
  lim(.3 * schain(pan) + lp(DR,1)*.3, .1, 512, 1, 9, 0, 16, -.1, 1)*.1 +
  lim( DR*.14 + lp(DR,2)*.5 + lverb(pan)*.2 + leads(pan)*.16 + B2d*.35 + L3s*.35, 0, 512, 0, 9, 0, 0)/2 //just latency
 
 
-,.01, 512, 1, 92 + 6e11/(t**2+9e9), 99, 16, 0, 0
+,.01, 512, 1, 92 + 6e11/(t**2+9e9), 99, 99, 0, 0
 
 ),
 
