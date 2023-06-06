@@ -116,7 +116,6 @@ lp = lopass = (x, f) => ( // f ~= frequency, but not 1:1
 	F[I] = min( max( x % 256, F[I] - f), F[I++] + f) // Clamp the change since last sample between (-f, f)
 ),
 
-
 //For a hi-pass sound, m(x)^lp(x) sounds more harsh; lim(x, 9, <# under 256> ) sounds more natural, but is sosig
 
 
@@ -143,8 +142,9 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias
 	mi = mx = o;
 	for( i=1; i <= iters; i++) { //older to newest
 		y = p ? ( i / (iters+1) ) ** p : 0;
-		mi = min( mi, F[ x( i * lookahead / iters) ] * (1-y) + o * y );
-		mx = max( mx, F[ x( i * lookahead / iters) ] * (1-y) + o * y );
+		z = F[ x( ( i + sin(i)/2 ) * lookahead / iters ) ]; //sin(i) is for hum reduction
+		mi = min( mi, z * (1-y) + o * y );
+		mx = max( mx, z * (1-y) + o * y );
 	}
 	mi = F[ I ] = min( mi, F[ I ] + speed );
 	mx = F[ I+1 ] = max( mx, F[ I+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
