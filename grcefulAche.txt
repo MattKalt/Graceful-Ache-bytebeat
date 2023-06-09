@@ -4,7 +4,9 @@
 T = t,
 
 //Change t here, not below, or it messes with the snare/hihat sounds
-t *= 8 / 48,
+t *= r8 = 8 / 48,
+
+//t = ( 1024 & t )/8 + t, //FAST SWANG! (drums might sound scuffed)
 
 // Repeat x beats of y
 // SUPER useful if you're writing complex beats/melodies
@@ -54,7 +56,7 @@ mseq = ( ...x ) => t * 2 ** ( ( seq(...x) + ((t/9>>17)%3) )  / 12 ), //Trucker's
 //mseq = (arr, spd, T=t) => t * 2 ** ( ( ((t/9>>17)&3) + arr[ ( ( T >> spd+4 ) + ( 21 & T >> spd ) ) % arr.length] ) / 12 ), //changes all the melodies
 //smooth version, works well with seq lerp: (also features Trucker's Chorus)
 mseq = ( ...x ) => (
-	F[I++] += ( t/T * 2 ** ( ( seq(...x) + ((t/9>>17)%3) )  / 12))||0
+	F[I++] += ( r8 * 2 ** ( ( seq(...x) + ((t/9>>17)%3) )  / 12))||0
 ),
 
 
@@ -135,7 +137,7 @@ If your input only has peaks going upward (like anything involving beat() or syn
 	0, or very large: lower pitches dominate
 	0..1: stacatto and trebly
 */
-lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 0) => {
+lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 9, iters = 4, saturate = 0, p = 0) => {
 	x = y => I + 2 + ( T + y|0 ) % lookahead;
 	F[ x(0) ] = input; //newest in buffer, equivalent to F[ x(lookahead) ]
 	o = F[ x(1) ]; //oldest in buffer
@@ -150,19 +152,22 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias
 	mx = F[ I+1 ] = max( mx, F[ I+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
 	I += 2 + lookahead;
 	return ds( ( o - mi ) * 255/(mx-mi), saturate ) * wet + o * (1-wet)
+	//return ds( ( o - mi ) * 2/(mx-mi) - 1, saturate ) * wet + o * (1-wet) //for floatbeat
+
 },
 
-
-// ~5 chars shorter when minified but slightly worse/different performance:
+// ~5 chars shorter when minified:
 /*
-lim2 = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias = 0, iters = 4, saturate = 0, p = 0) => (
+lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 9, iters = 4, saturate = 0, p = 0) => (
 	x = y => I + 2 + ( T + y|0 ) % lookahead,
-	o = F[ x(0) ], //oldest in buffer
+	F[ x(0) ] = input,
+	o = F[ x(1) ], //oldest in buffer
 	mx = mi = o,
 	r(iters+1).map((e,i) => (
 		y = p ? ( i / (iters+1) ) ** p : 0,
-		mi = min( mi, F[ x( i * lookahead / iters) ] * (1-y) + o * y ),
-		mx = max( mx, F[ x( i * lookahead / iters) ] * (1-y) + o * y ),
+		z = F[ x( ( i + sin(i)/2 ) * lookahead / iters ) ], //sin(i) is for hum reduction
+		mi = min( mi, z * (1-y) + o * y ),
+		mx = max( mx, z * (1-y) + o * y ),
 		e)
 	),
 	mi = F[ I ] = min( mi, F[ I ] + speed ),
@@ -173,7 +178,7 @@ lim2 = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bia
 ),
 */
 
-//shorter, worse performance, no 'p'
+//shorter, worse performance, no 'p', no hum reduction
 /*
 lim2 = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bias = 0, iters = 4, saturate = 0) => (
 	x = y => I + 2 + ( T + y|0 ) % lookahead,
@@ -193,19 +198,21 @@ lim2 = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bia
 */
 
 
-// XORs the input with its harmonics, controlled by the bits of a number ('tone')
-// Unoptimized version
-//hm = harmonify = (x,tone, waveTableSize = 8) => (
-//	waveTableSize *= 64 * T / t | 0,
-//	r(8).reduce((o,e,i)=>(
-//		y = (i+1)/2 * x,
-//		o ^ ( ( 1 & (tone>>i) ) * (i+1)/2 * x ) % waveTableSize
-//		//o ^ ( ( 1 & (tone>>i) ) * y ) % waveTableSize ^ ( abs( m( tone>>(i+8) * y ) - 128 ) * 2 ) % waveTableSize
-//		),0
-//	)
-//),
+//XORs the input with its harmonics, controlled by the bits of a number ('tone')
+//pretends it uses a wavetable, but doesn't
+hm = harmonify = (x,tone, waveTableSize = 8) => (
+	//waveTableSize *= 64 * T / t | 0,
+	waveTableSize *= 64 / r8 | 0,
+	r(8).reduce((o,e,i)=>(
+		y = (i+1)/2 * x,
+		o ^ ( ( 1 & (tone>>i) ) * (i+1)/2 * x ) % waveTableSize
+		//o ^ ( ( 1 & (tone>>i) ) * y ) % waveTableSize ^ ( abs( m( tone>>(i+8) * y ) - 128 ) * 2 ) % waveTableSize
+		),0
+	)
+),
 
-//Version with a for-loop instead of reduce(), ~10 chars more after minification, but possible huge performance boost
+//Version with a for-loop instead of reduce(), ~10 chars more after minification
+/*
 hm = harmonify = (x,tone, waveTableSize = 8) => {
 	waveTableSize *= 64 * T / t | 0;
 	o = 0;
@@ -217,6 +224,7 @@ hm = harmonify = (x,tone, waveTableSize = 8) => {
 	}
 	return o;
 },
+*/
 
 // Instead of computing on the fly, this version computes a wavetable at the start
 // Side effects: you can't start the song at any t, and output is always full-volume
@@ -633,7 +641,7 @@ DR += beat( [s], 10, 2e5) * seq( sn1, 10) * .8,
 DR += beat( [S], 10, 2e5) * seq( sn2, 10) * .8,
 
 
-leads = pan => lim( pan ? L1s*.4 : L2s*.7, 0, 1),
+leads = pan => lim( pan ? L1s*.4 : L2s*.7, 0, 1, 0),
 lverb = pan => pan ? L2v*.4 : L2v/4 + L1v/6,
 schain = pan => ( B1a ^ lp(B1a, pan ? .1 : .082 ) ) *.35 + lverb(pan)*.2 + B2b/11 + B2d/5.5 + L3s/2 + L4s/9 + B2s/14,
 
@@ -645,6 +653,6 @@ Master = pan => lim(
 
 ,.01, 512, 1, 92 + 6e11/(t**2+9e9), 99, 16, 0, 0
 
-),
+)/128 - 1, //for floatbeat
 
 [ Master(0), Master(1) ]
