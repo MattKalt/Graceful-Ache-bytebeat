@@ -6,7 +6,7 @@ T = t,
 //Change t here, not below, or it messes with the snare/hihat sounds
 t *= r8 = 8 / 48,
 
-//t = ( 1024 & t )/8 + t, //FAST SWANG! (drums might sound scuffed)
+//t = ( 1024 & t )/4 + t, //FAST SWANG! (drums sound scuffed)
 
 // Repeat x beats of y
 // SUPER useful if you're writing complex beats/melodies
@@ -37,7 +37,7 @@ ds = (x, amt) => x * (1 - amt) + 127 * ( ( ( x / 127 ) - 1 ) ** 3 + 1 ) * amt,
 // If you see red (NaNs), raise 26e3 higher, or adjust your reverbs' 'dsp' variable (and limiters' lookahead)
 // Works best when effects are not inside conditionals (meaning the number of F in use changes)
 // But even then, should only create a momentary click/pop (might be more severe for reverb)
-t ? 0 : F = r( 56e3, 0 ),
+T ? 0 : F = r( 56e3, 0 ),
 // Iterator, resets to 0 at every t
 I = 0,
 
@@ -136,6 +136,7 @@ If your input only has peaks going upward (like anything involving beat() or syn
 'p' changes how lookaheads affect the function:
 	0, or very large: lower pitches dominate
 	0..1: stacatto and trebly
+Hum reduction is only really noticeable when speed > 9 and thresh is low
 */
 lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias = 9, iters = 4, saturate = 0, p = 0) => {
 	x = y => I + 2 + ( T + y|0 ) % lookahead;
@@ -149,7 +150,7 @@ lim = limiter = (input, speed = .1, lookahead = 512, wet = 1, thresh = 9, bias =
 		mx = max( mx, z * (1-y) + o * y );
 	}
 	mi = F[ I ] = min( mi, F[ I ] + speed );
-	mx = F[ I+1 ] = max( mx, F[ I+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) );
+	mx = F[ I+1 ] = max( mx, F[ I+1 ] - speed * ( bias + 1 ), mi + ( t ? thresh : 255 ) ); //could probably be 99
 	I += 2 + lookahead;
 	return ds( ( o - mi ) * 255/(mx-mi), saturate ) * wet + o * (1-wet)
 	//return ds( ( o - mi ) * 2/(mx-mi) - 1, saturate ) * wet + o * (1-wet) //for floatbeat
@@ -202,7 +203,7 @@ lim2 = limiter = (input, speed = .1, lookahead = 512, wet = .99, thresh = 9, bia
 //pretends it uses a wavetable, but doesn't
 hm = harmonify = (x,tone, waveTableSize = 8) => (
 	//waveTableSize *= 64 * T / t | 0,
-	waveTableSize *= 64 / r8 | 0,
+	waveTableSize *= 64 / r8 | 0, //swing-proofed
 	r(8).reduce((o,e,i)=>(
 		y = (i+1)/2 * x,
 		o ^ ( ( 1 & (tone>>i) ) * (i+1)/2 * x ) % waveTableSize
